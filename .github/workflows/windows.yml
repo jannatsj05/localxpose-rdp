@@ -1,0 +1,21 @@
+name: Free-RDP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Setup LocalXpose
+      run: |
+        Invoke-WebRequest -Uri https://localxpose.io/releases/localxpose-windows-amd64.zip -OutFile lx.zip
+        Expand-Archive lx.zip -DestinationPath .
+        .\localxpose.exe authtoken ${{ secrets.LOCALXPOSE_TOKEN }}
+
+    - name: Enable RDP and Tunnel
+      run: |
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
+        .\localxpose.exe tcp 3389
