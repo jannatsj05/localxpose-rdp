@@ -32,15 +32,15 @@ jobs:
       - name: Authenticate LocalXpose CLI (non-interactive)
         shell: powershell
         env:
-          LOCALXPOSE_TOKEN: ${{ secrets.LOCALXPOSE_TOKEN }}
+          LOCALXPOSE_TOKEN: ${{ secrets.LOCLX_TOKEN}}
         run: |
-          if (-not $Env:LOCALXPOSE_TOKEN -or $Env:LOCALXPOSE_TOKEN.Trim() -eq "") {
+          if (-not $Env:LOCALXPOSE_TOKEN -or $Env:LOCLX_TOKEN.Trim() -eq "") {
             Write-Error "LOCALXPOSE_TOKEN secret is missing."
             exit 1
           }
 
           try {
-            & .\loclx.exe authtoken $Env:LOCALXPOSE_TOKEN
+            & .\loclx.exe authtoken $Env:LOCLX_TOKEN
             Write-Host "✅ Authenticated using token."
           } catch {
             Write-Warning "Authtoken failed or not supported. Make sure session exists on runner."
