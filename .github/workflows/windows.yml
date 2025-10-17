@@ -34,8 +34,8 @@ jobs:
         env:
           LOCALXPOSE_TOKEN: ${{ secrets.LOCLX_TOKEN}}
         run: |
-          if (-not $Env:LOCALXPOSE_TOKEN -or $Env:LOCLX_TOKEN.Trim() -eq "") {
-            Write-Error "LOCALXPOSE_TOKEN secret is missing."
+          if (-not $Env:LOCLX_TOKEN -or $Env:LOCLX_TOKEN.Trim() -eq "") {
+            Write-Error "LOCLX_TOKEN secret is missing."
             exit 1
           }
 
