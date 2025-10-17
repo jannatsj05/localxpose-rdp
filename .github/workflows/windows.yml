@@ -18,7 +18,7 @@ jobs:
           Expand-Archive -Path $zip -DestinationPath "." -Force
           # Ensure correct binary name
           if (Test-Path ".\loclx.exe") {
-            Copy-Item -Path ".\localxpose.exe" -Destination ".\loclx.exe" -Force
+            Copy-Item -Path ".\loclx.exe" -Destination ".\loclx.exe" -Force
           }
 
       - name: Authenticate LocalXpose CLI (non-interactive)
