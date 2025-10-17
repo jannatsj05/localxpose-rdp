@@ -32,7 +32,7 @@ jobs:
       - name: Authenticate LocalXpose CLI (non-interactive)
         shell: powershell
         env:
-          LOCALXPOSE_TOKEN: ${{ secrets.LOCLX_TOKEN}}
+          LOCLX_TOKEN: ${{ secrets.LOCLX_TOKEN }}
         run: |
           if (-not $Env:LOCLX_TOKEN -or $Env:LOCLX_TOKEN.Trim() -eq "") {
             Write-Error "LOCLX_TOKEN secret is missing."
