@@ -1,4 +1,4 @@
-name: Free-RDP-NonInteractive
+name: Free-RDP-PreReserved
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ jobs:
           Invoke-WebRequest -Uri "https://api.localxpose.io/api/downloads/loclx-windows-amd64.zip" -OutFile $zip -UseBasicParsing
           Expand-Archive -Path $zip -DestinationPath "." -Force
 
-          # Ensure correct binary name (avoid overwrite itself)
+          # Ensure correct binary name
           if (Test-Path ".\localxpose.exe") {
               if (-not (Test-Path ".\loclx.exe")) {
                   Copy-Item -Path ".\localxpose.exe" -Destination ".\loclx.exe" -Force
@@ -25,11 +25,16 @@ jobs:
               } else {
                   Write-Host "loclx.exe already exists, skipping copy."
               }
-          } else {
-              Write-Host "loclx.exe found or extracted, nothing to copy."
           }
 
-      - name: Authenticate LocalXpose CLI (non-interactive)
+      - name: Enable RDP & Firewall
+        shell: powershell
+        run: |
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+          Write-Host "✅ RDP enabled and firewall configured."
+
+      - name: Start TCP Tunnel for RDP (Pre-reserved endpoint)
         shell: powershell
         env:
           LOCLX_TOKEN: ${{ secrets.LOCLX_TOKEN }}
@@ -39,38 +44,30 @@ jobs:
             exit 1
           }
 
+          # Replace these with your reserved endpoint info
+          $region = "us"                  # Region of reserved endpoint
+          $publicPort = 4455              # Port you reserved on dashboard
+          $localPort = 3389
+
+          Write-Host "Starting TCP tunnel: local $localPort -> public $region.loclx.io:$publicPort"
+
+          # Use authtoken if supported
           try {
             & .\loclx.exe authtoken $Env:LOCLX_TOKEN
             Write-Host "✅ Authenticated using token."
           } catch {
-            Write-Warning "Authtoken failed or not supported. Make sure session exists on runner."
+            Write-Warning "Authtoken login failed or not supported, make sure endpoint is pre-reserved."
           }
 
-          # Show account status for debugging
-          & .\loclx.exe account status 2>&1 | ForEach-Object { Write-Host $_ }
-
-      - name: Enable RDP & Firewall
-        shell: powershell
-        run: |
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
-          Write-Host "✅ RDP enabled and firewall configured."
-
-      - name: Start TCP Tunnel for RDP
-        shell: powershell
-        run: |
-          $publicPort = 4455
-          $localPort = 3389
-          Write-Host "Starting TCP tunnel: local $localPort -> public $publicPort"
-
-          $proc = Start-Process -FilePath ".\loclx.exe" -ArgumentList "tunnel","tcp","--to","127.0.0.1:$localPort","--port",$publicPort -WindowStyle Hidden -PassThru
+          # Start tunnel using reserved port
+          $args = "tunnel","tcp","--to","127.0.0.1:$localPort","--port",$publicPort,"--region",$region
+          $proc = Start-Process -FilePath ".\loclx.exe" -ArgumentList $args -WindowStyle Hidden -PassThru
           Start-Sleep -Seconds 6
 
-          # Display expected public address
-          Write-Host "🌐 Public RDP address: us.loclx.io:$publicPort"
+          Write-Host "🌐 Public RDP address: $region.loclx.io:$publicPort"
           Write-Host "LocalXpose process id: $($proc.Id)"
 
-          # Optional: show tunnel list from CLI
+          # Optional: list tunnels
           $tunnels = & .\loclx.exe tunnel list 2>&1
           Write-Host "Tunnel list output:"
           $tunnels | ForEach-Object { Write-Host $_ }
