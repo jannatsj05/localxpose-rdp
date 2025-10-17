@@ -1,4 +1,4 @@
-name: Free-RDP
+name: Free-RDP-NonInteractive
 
 on:
   workflow_dispatch:
@@ -6,16 +6,63 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
-    - name: Setup LocalXpose
-      run: |
-        Invoke-WebRequest -Uri https://api.localxpose.io/api/downloads/loclx-windows-amd64.zip -OutFile lx.zip
-        Expand-Archive lx.zip -DestinationPath .
-        .\loclx.exe authtoken ${{ secrets.LOCALXPOSE_TOKEN }}
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Enable RDP and Tunnel
-      run: |
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
-        .\localxpose.exe tcp 3389
+      - name: Download LocalXpose CLI
+        shell: powershell
+        run: |
+          $zip = "loclx.zip"
+          Invoke-WebRequest -Uri "https://api.localxpose.io/api/downloads/loclx-windows-amd64.zip" -OutFile $zip -UseBasicParsing
+          Expand-Archive -Path $zip -DestinationPath "." -Force
+          # Ensure correct binary name
+          if (Test-Path ".\loclx.exe") {
+            Copy-Item -Path ".\localxpose.exe" -Destination ".\loclx.exe" -Force
+          }
+
+      - name: Authenticate LocalXpose CLI (non-interactive)
+        shell: powershell
+        env:
+          LOCALXPOSE_TOKEN: ${{ secrets.LOCALXPOSE_TOKEN }}
+        run: |
+          if (-not $Env:LOCALXPOSE_TOKEN -or $Env:LOCALXPOSE_TOKEN.Trim() -eq "") {
+            Write-Error "LOCALXPOSE_TOKEN secret is missing."
+            exit 1
+          }
+          # Try authtoken login (some CLI versions support this)
+          try {
+            & .\loclx.exe authtoken $Env:LOCALXPOSE_TOKEN
+            Write-Host "✅ Authenticated using token."
+          } catch {
+            Write-Warning "Authtoken failed or not supported. Make sure session exists on runner."
+          }
+          & .\loclx.exe account status
+
+      - name: Enable RDP & Firewall
+        shell: powershell
+        run: |
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+
+      - name: Start TCP Tunnel for RDP
+        shell: powershell
+        run: |
+          $publicPort = 4455
+          $localPort = 3389
+          Write-Host "Starting TCP tunnel: local $localPort -> public $publicPort"
+          $proc = Start-Process -FilePath ".\loclx.exe" -ArgumentList "tunnel","tcp","--to","127.0.0.1:$localPort","--port",$publicPort -WindowStyle Hidden -PassThru
+          Start-Sleep -Seconds 6
+          
+          # Display expected public address
+          Write-Host "🌐 Public RDP address: us.loclx.io:$publicPort"
+          Write-Host "LocalXpose process id: $($proc.Id)"
+          
+          # Optional: show tunnel list from CLI
+          $tunnels = & .\loclx.exe tunnel list 2>&1
+          Write-Host "Tunnel list output:"
+          $tunnels | ForEach-Object { Write-Host $_ }
+
+      - name: Keep Session Alive
+        shell: cmd
+        run: ping -t 127.0.0.1 >nul
