@@ -1,4 +1,4 @@
-name: Free-RDP-PreReserved
+name: Free-RDP-AutoTunnel
 
 on:
   workflow_dispatch:
@@ -34,7 +34,7 @@ jobs:
           Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
           Write-Host "✅ RDP enabled and firewall configured."
 
-      - name: Start TCP Tunnel for RDP (Pre-reserved endpoint)
+      - name: Authenticate LocalXpose CLI (non-interactive)
         shell: powershell
         env:
           LOCLX_TOKEN: ${{ secrets.LOCLX_TOKEN }}
@@ -44,30 +44,33 @@ jobs:
             exit 1
           }
 
-          # Replace these with your reserved endpoint info
-          $region = "us"                  # Region of reserved endpoint
-          $publicPort = 4455              # Port you reserved on dashboard
-          $localPort = 3389
-
-          Write-Host "Starting TCP tunnel: local $localPort -> public $region.loclx.io:$publicPort"
-
-          # Use authtoken if supported
           try {
             & .\loclx.exe authtoken $Env:LOCLX_TOKEN
             Write-Host "✅ Authenticated using token."
           } catch {
-            Write-Warning "Authtoken login failed or not supported, make sure endpoint is pre-reserved."
+            Write-Warning "Authtoken failed or not supported, make sure session exists on runner."
           }
 
-          # Start tunnel using reserved port
-          $args = "tunnel","tcp","--to","127.0.0.1:$localPort","--port",$publicPort,"--region",$region
+          # Debug: show account status
+          & .\loclx.exe account status 2>&1 | ForEach-Object { Write-Host $_ }
+
+      - name: Start TCP Tunnel for RDP with random public port
+        shell: powershell
+        run: |
+          $localPort = 3389
+          $publicPort = Get-Random -Minimum 4000 -Maximum 50000
+          Write-Host "Starting TCP tunnel: local $localPort -> public port $publicPort"
+
+          $args = "tunnel","tcp","--to","127.0.0.1:$localPort","--port",$publicPort
           $proc = Start-Process -FilePath ".\loclx.exe" -ArgumentList $args -WindowStyle Hidden -PassThru
+
           Start-Sleep -Seconds 6
 
-          Write-Host "🌐 Public RDP address: $region.loclx.io:$publicPort"
+          # Show public RDP URL
+          Write-Host "🌐 Public RDP address: tcp://$(hostname):$publicPort"
           Write-Host "LocalXpose process id: $($proc.Id)"
 
-          # Optional: list tunnels
+          # Optional: show tunnel list
           $tunnels = & .\loclx.exe tunnel list 2>&1
           Write-Host "Tunnel list output:"
           $tunnels | ForEach-Object { Write-Host $_ }
